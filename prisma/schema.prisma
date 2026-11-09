@@ -1,0 +1,171 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model CompanySettings {
+  id              String   @id @default("default")
+  name            String   @default("KingFlow SARL")
+  tagline         String?  @default("Gestion Commerciale & Facturation Pro")
+  email           String?  @default("contact@kingflow.com")
+  phone           String?  @default("+221 77 123 45 67")
+  whatsapp        String?  @default("+221 77 123 45 67")
+  address         String?  @default("Avenue Léopold Sédar Senghor, Plateau")
+  city            String?  @default("Dakar")
+  country         String?  @default("Sénégal")
+  taxId           String?  @default("SN-DKR-2024-B-12345 / NINEA 00987654")
+  currency        String   @default("XOF")
+  defaultVatRate  Float    @default(18.0)
+  logoUrl         String?
+  invoiceTerms    String?  @default("Paiement à réception de facture. Tout retard de paiement donnera lieu au versement d'une pénalité.")
+  receiptFooter   String?  @default("Merci de votre confiance ! Les articles vendus ne sont ni repris ni échangés au-delà de 48h.")
+  updatedAt       DateTime @updatedAt
+}
+
+model Customer {
+  id          String    @id @default(cuid())
+  name        String
+  companyName String?
+  email       String?
+  phone       String?
+  whatsapp    String?
+  address     String?
+  city        String?
+  country     String?   @default("Sénégal")
+  notes       String?
+  invoices    Invoice[]
+  payments    Payment[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Supplier {
+  id          String    @id @default(cuid())
+  name        String
+  companyName String?
+  email       String?
+  phone       String?
+  address     String?
+  category    String?   @default("Fournisseur Général")
+  expenses    Expense[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Product {
+  id             String          @id @default(cuid())
+  sku            String          @unique
+  name           String
+  description    String?
+  category       String          @default("Général")
+  type           String          @default("PRODUCT") // PRODUCT, SERVICE
+  purchasePrice  Float           @default(0)
+  sellingPrice   Float           @default(0)
+  stockQuantity  Int             @default(0)
+  minStockAlert  Int             @default(5)
+  unit           String          @default("pièce")
+  isActive       Boolean         @default(true)
+  invoiceItems   InvoiceItem[]
+  stockMovements StockMovement[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model StockMovement {
+  id           String   @id @default(cuid())
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type         String   // IN, OUT, ADJUSTMENT
+  quantity     Int
+  previousStock Int
+  newStock     Int
+  reason       String   // RECEPTION_FOURNISSEUR, VENTE_FACTURE, PERTE, CASSE, INVENTAIRE, RETOUR
+  referenceDoc String?
+  notes        String?
+  createdAt    DateTime @default(now())
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  number        String        @unique
+  type          String        @default("INVOICE") // INVOICE, QUOTE
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  status        String        @default("DRAFT") // DRAFT, SENT, PARTIALLY_PAID, PAID, OVERDUE, CANCELLED
+  issueDate     DateTime      @default(now())
+  dueDate       DateTime
+  subtotal      Float         @default(0)
+  discountType  String        @default("PERCENT") // PERCENT, FIXED
+  discountValue Float         @default(0)
+  discountAmount Float        @default(0)
+  taxRate       Float         @default(18.0)
+  taxAmount     Float         @default(0)
+  total         Float         @default(0)
+  paidAmount    Float         @default(0)
+  balanceDue    Float         @default(0)
+  notes         String?
+  terms         String?
+  items         InvoiceItem[]
+  payments      Payment[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  description String
+  quantity    Float    @default(1)
+  unitPrice   Float    @default(0)
+  total       Float    @default(0)
+}
+
+model Payment {
+  id            String    @id @default(cuid())
+  invoiceId     String?
+  invoice       Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  customerId    String?
+  customer      Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  amount        Float
+  paymentDate   DateTime  @default(now())
+  paymentMethod String    @default("CASH") // CASH, BANK_TRANSFER, WAVE, ORANGE_MONEY, MTN_MOMO, CHECK
+  reference     String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+}
+
+model Expense {
+  id            String    @id @default(cuid())
+  title         String
+  category      String    // LOYER, ELECTRICITE_EAU, TRANSPORT, SALAIRES, ACHAT_FOURNISSEUR, MARKETING, AUTRES
+  amount        Float
+  expenseDate   DateTime  @default(now())
+  paymentMethod String    @default("CASH") // CASH, BANK_TRANSFER, WAVE, ORANGE_MONEY, MTN_MOMO, CHECK
+  isPaid        Boolean   @default(true)
+  supplierId    String?
+  supplier      Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  receiptUrl    String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+}
+
+model CalendarEvent {
+  id         String   @id @default(cuid())
+  title      String
+  type       String   // LIVRAISON, RDV_CLIENT, REUNION, INVENTAIRE, ECHEANCE, AUTRE
+  date       DateTime
+  time       String?  // e.g. "10:30"
+  location   String?
+  clientName String?
+  notes      String?
+  isDone     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
