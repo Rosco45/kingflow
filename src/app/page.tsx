@@ -1,101 +1,201 @@
-import Image from "next/image";
+"use client";
+
+import React, { useState, useEffect } from "react";
+import Sidebar, { TabId } from "@/components/layout/Sidebar";
+import Navbar from "@/components/layout/Navbar";
+import DashboardView from "@/components/dashboard/DashboardView";
+import InvoicesView from "@/components/invoicing/InvoicesView";
+import ClientsView from "@/components/clients/ClientsView";
+import SuppliersView from "@/components/suppliers/SuppliersView";
+import InventoryView from "@/components/inventory/InventoryView";
+import TreasuryView from "@/components/treasury/TreasuryView";
+import DebtsView from "@/components/treasury/DebtsView";
+import ReportsView from "@/components/reports/ReportsView";
+import SettingsView from "@/components/settings/SettingsView";
+import InvoiceModal from "@/components/invoicing/InvoiceModal";
+import GlobalSearchModal from "@/components/layout/GlobalSearchModal";
+import { InvoiceData, DocumentType } from "@/types";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [activeTab, setActiveTab] = useState<TabId>("dashboard");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  // Global Search Modal (Ctrl + K)
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  // Quick Action Invoice Modal
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [modalDocType, setModalDocType] = useState<DocumentType>("INVOICE");
+  const [modalCustomerId, setModalCustomerId] = useState<string | undefined>();
+
+  // Document viewing state passed to InvoicesView
+  const [selectedInvoiceForView, setSelectedInvoiceForView] = useState<InvoiceData | null>(null);
+
+  // Badge alert counts
+  const [lowStockCount, setLowStockCount] = useState(0);
+  const [pendingReceivablesCount, setPendingReceivablesCount] = useState(0);
+
+  const fetchAlertCounts = async () => {
+    try {
+      const res = await fetch("/api/dashboard");
+      if (res.ok) {
+        const data = await res.json();
+        setLowStockCount((data.lowStockCount || 0) + (data.outOfStockCount || 0));
+        setPendingReceivablesCount(data.unpaidInvoicesCount || 0);
+      }
+    } catch (err) {
+      console.warn("Could not fetch alerts:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAlertCounts();
+    const interval = setInterval(fetchAlertCounts, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Keyboard shortcut Ctrl+K / Cmd+K for Global Search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsSearchOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const handleQuickCreate = (type: "invoice" | "quote" | "customer" | "expense") => {
+    if (type === "invoice") {
+      setModalDocType("INVOICE");
+      setModalCustomerId(undefined);
+      setIsInvoiceModalOpen(true);
+    } else if (type === "quote") {
+      setModalDocType("QUOTE");
+      setModalCustomerId(undefined);
+      setIsInvoiceModalOpen(true);
+    } else if (type === "customer") {
+      setActiveTab("clients");
+    } else if (type === "expense") {
+      setActiveTab("treasury");
+    }
+  };
+
+  const handleQuickInvoiceForCustomer = (customerId: string) => {
+    setModalDocType("INVOICE");
+    setModalCustomerId(customerId);
+    setIsInvoiceModalOpen(true);
+  };
+
+  const handleOpenInvoiceFromAnywhere = (invoice: InvoiceData) => {
+    setSelectedInvoiceForView(invoice);
+    setActiveTab("invoicing");
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f4f7fc] dark:bg-[#070d1e] text-slate-900 dark:text-slate-100 flex transition-colors">
+      {/* Sidebar Navigation - 64 width */}
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        mobileOpen={mobileMenuOpen}
+        setMobileOpen={setMobileMenuOpen}
+        lowStockCount={lowStockCount}
+        pendingReceivablesCount={pendingReceivablesCount}
+      />
+
+      {/* Main Content Area */}
+      <div className="flex-1 lg:pl-64 flex flex-col min-h-screen">
+        <Navbar
+          onMenuClick={() => setMobileMenuOpen(true)}
+          activeTab={activeTab}
+          onOpenSearch={() => setIsSearchOpen(true)}
+          onQuickCreate={handleQuickCreate}
+          lowStockCount={lowStockCount}
+          pendingReceivablesCount={pendingReceivablesCount}
+          onNavigateToTab={setActiveTab}
+        />
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+          {activeTab === "dashboard" && (
+            <DashboardView
+              onNavigateToTab={setActiveTab}
+              onQuickCreate={handleQuickCreate}
+              onOpenInvoice={handleOpenInvoiceFromAnywhere}
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          )}
+
+          {activeTab === "sales" && (
+            <InvoicesView
+              mode="sales"
+              onOpenCreate={(type) => {
+                setModalDocType(type);
+                setModalCustomerId(undefined);
+                setIsInvoiceModalOpen(true);
+              }}
+              selectedInvoiceForView={selectedInvoiceForView}
+              onClearSelectedInvoice={() => setSelectedInvoiceForView(null)}
+            />
+          )}
+
+          {activeTab === "invoicing" && (
+            <InvoicesView
+              mode="all"
+              onOpenCreate={(type) => {
+                setModalDocType(type);
+                setModalCustomerId(undefined);
+                setIsInvoiceModalOpen(true);
+              }}
+              selectedInvoiceForView={selectedInvoiceForView}
+              onClearSelectedInvoice={() => setSelectedInvoiceForView(null)}
+            />
+          )}
+
+          {activeTab === "clients" && (
+            <ClientsView
+              onQuickInvoice={handleQuickInvoiceForCustomer}
+              onOpenInvoice={handleOpenInvoiceFromAnywhere}
+            />
+          )}
+
+          {activeTab === "suppliers" && <SuppliersView />}
+
+          {activeTab === "inventory" && <InventoryView />}
+
+          {activeTab === "treasury" && <TreasuryView />}
+
+          {activeTab === "debts" && (
+            <DebtsView
+              onOpenInvoice={handleOpenInvoiceFromAnywhere}
+              onNavigateToTab={setActiveTab}
+            />
+          )}
+
+          {activeTab === "reports" && <ReportsView />}
+
+          {activeTab === "settings" && <SettingsView />}
+        </main>
+      </div>
+
+      {/* Global Command Palette / Search Modal */}
+      <GlobalSearchModal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        onNavigateToTab={setActiveTab}
+        onOpenInvoice={handleOpenInvoiceFromAnywhere}
+      />
+
+      {/* Quick Invoice & Quote Modal */}
+      <InvoiceModal
+        isOpen={isInvoiceModalOpen}
+        onClose={() => setIsInvoiceModalOpen(false)}
+        initialType={modalDocType}
+        initialCustomerId={modalCustomerId}
+        onSuccess={() => {
+          fetchAlertCounts();
+        }}
+      />
     </div>
   );
 }
